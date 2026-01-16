@@ -1,0 +1,92 @@
+-- ==================== EXTENSIONS ====================
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ==================== USERS TABLE ====================
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20),
+    role VARCHAR(20) DEFAULT 'customer' CHECK (role IN ('customer', 'staff', 'admin')),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== BILLIARD CLUBS ====================
+CREATE TABLE clubs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(200) NOT NULL,
+    address TEXT NOT NULL,
+    phone VARCHAR(20),
+    open_time TIME NOT NULL DEFAULT '08:00',
+    close_time TIME NOT NULL DEFAULT '23:00',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== TABLE TYPES ====================
+CREATE TABLE table_types (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(100) NOT NULL,  -- 'Bida Lỗ', 'Bida Phăng', 'Bida Carom'
+    description TEXT,
+    price_per_hour DECIMAL(10, 2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== BILLIARD TABLES ====================
+CREATE TABLE tables (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    club_id UUID REFERENCES clubs(id) ON DELETE CASCADE,
+    table_type_id UUID REFERENCES table_types(id),
+    table_number VARCHAR(20) NOT NULL,
+    status VARCHAR(20) DEFAULT 'available' CHECK (status IN ('available', 'occupied', 'maintenance', 'reserved')),
+    floor INT DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(club_id, table_number)
+);
+
+-- ==================== BOOKINGS ====================
+CREATE TABLE bookings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    table_id UUID REFERENCES tables(id) ON DELETE CASCADE,
+    booking_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled', 'completed', 'no_show')),
+    total_amount DECIMAL(10, 2),
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== PAYMENTS ====================
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+    amount DECIMAL(10, 2) NOT NULL,
+    payment_method VARCHAR(50) CHECK (payment_method IN ('cash', 'vnpay', 'momo', 'bank_transfer')),
+    payment_status VARCHAR(20) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'completed', 'failed', 'refunded')),
+    transaction_id VARCHAR(100),
+    paid_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==================== INDEXES ====================
+CREATE INDEX idx_bookings_user ON bookings(user_id);
+CREATE INDEX idx_bookings_table ON bookings(table_id);
+CREATE INDEX idx_bookings_date ON bookings(booking_date);
+CREATE INDEX idx_tables_club ON tables(club_id);
+CREATE INDEX idx_tables_status ON tables(status);
+
+-- ==================== SAMPLE DATA ====================
+INSERT INTO table_types (name, description, price_per_hour) VALUES
+('Bida Lỗ (Pool)', 'Bàn bida lỗ tiêu chuẩn', 50000),
+('Bida Phăng (Snooker)', 'Bàn snooker chuyên nghiệp', 80000),
+('Bida Carom', 'Bàn bida 3 băng', 70000);
+
+INSERT INTO clubs (name, address, phone, open_time, close_time) VALUES
+('Bida Club Center', '123 Nguyễn Huệ, Quận 1, TP.HCM', '0901234567', '08:00', '23:00'),
+('Pro Billiards', '456 Lê Lợi, Quận 3, TP.HCM', '0907654321', '09:00', '24:00');

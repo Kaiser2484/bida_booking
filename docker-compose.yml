@@ -1,0 +1,208 @@
+version: '3.8'
+
+services:
+  # ==================== DATABASES ====================
+  postgres:
+    image:  postgres:15-alpine
+    container_name: bida_postgres
+    environment: 
+      POSTGRES_USER: bida_admin
+      POSTGRES_PASSWORD: bida_secret_2024
+      POSTGRES_DB: bida_booking
+    ports: 
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db. sql:/docker-entrypoint-initdb. d/init.sql
+    networks: 
+      - bida_network
+    healthcheck: 
+      test: ["CMD-SHELL", "pg_isready -U bida_admin -d bida_booking"]
+      interval:  10s
+      timeout: 5s
+      retries:  5
+
+  redis:
+    image:  redis:7-alpine
+    container_name: bida_redis
+    ports:
+      - "6379:6379"
+    volumes: 
+      - redis_data:/data
+    networks:
+      - bida_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== MESSAGE QUEUE ====================
+  rabbitmq: 
+    image: rabbitmq:3-management-alpine
+    container_name: bida_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: bida_mq
+      RABBITMQ_DEFAULT_PASS: bida_mq_secret
+    ports: 
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - bida_network
+    healthcheck: 
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout:  10s
+      retries: 5
+
+  # ==================== MICROSERVICES ====================
+  api-gateway:
+    build: 
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: bida_api_gateway
+    ports:
+      - "3000:3000"
+    environment: 
+      - NODE_ENV=development
+      - PORT=3000
+      - USER_SERVICE_URL=http://user-service:3001
+      - TABLE_SERVICE_URL=http://table-service:3002
+      - BOOKING_SERVICE_URL=http://booking-service:3003
+      - PAYMENT_SERVICE_URL=http://payment-service:3004
+    depends_on: 
+      - user-service
+      - table-service
+      - booking-service
+    networks:
+      - bida_network
+
+  user-service: 
+    build: 
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: bida_user_service
+    ports:
+      - "3001:3001"
+    environment: 
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=postgresql://bida_admin:bida_secret_2024@postgres:5432/bida_booking
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://bida_mq:bida_mq_secret@rabbitmq:5672
+      - JWT_SECRET=your_jwt_secret_key_here
+    depends_on:
+      postgres:
+        condition:  service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq: 
+        condition: service_healthy
+    networks:
+      - bida_network
+
+  table-service: 
+    build:
+      context: ./services/table-service
+      dockerfile: Dockerfile
+    container_name:  bida_table_service
+    ports: 
+      - "3002:3002"
+    environment: 
+      - NODE_ENV=development
+      - PORT=3002
+      - DATABASE_URL=postgresql://bida_admin:bida_secret_2024@postgres:5432/bida_booking
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://bida_mq:bida_mq_secret@rabbitmq:5672
+    depends_on: 
+      postgres:
+        condition:  service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bida_network
+
+  booking-service: 
+    build: 
+      context: ./services/booking-service
+      dockerfile: Dockerfile
+    container_name: bida_booking_service
+    ports:
+      - "3003:3003"
+    environment: 
+      - NODE_ENV=development
+      - PORT=3003
+      - DATABASE_URL=postgresql://bida_admin:bida_secret_2024@postgres:5432/bida_booking
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://bida_mq:bida_mq_secret@rabbitmq:5672
+    depends_on: 
+      postgres: 
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: 
+      - bida_network
+
+  payment-service:
+    build:
+      context:  ./services/payment-service
+      dockerfile: Dockerfile
+    container_name: bida_payment_service
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=development
+      - PORT=3004
+      - DATABASE_URL=postgresql://bida_admin:bida_secret_2024@postgres:5432/bida_booking
+      - RABBITMQ_URL=amqp://bida_mq:bida_mq_secret@rabbitmq:5672
+    depends_on: 
+      postgres: 
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - bida_network
+
+  notification-service:
+    build: 
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: bida_notification_service
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=development
+      - PORT=3005
+      - RABBITMQ_URL=amqp://bida_mq:bida_mq_secret@rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      rabbitmq: 
+        condition: service_healthy
+    networks: 
+      - bida_network
+
+  # ==================== FRONTEND ====================
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bida_frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    depends_on: 
+      - api-gateway
+    networks: 
+      - bida_network
+
+networks:
+  bida_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
