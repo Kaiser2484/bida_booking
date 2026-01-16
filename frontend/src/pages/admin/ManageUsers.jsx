@@ -28,7 +28,7 @@ export default function ManageUsers() {
     try {
       setLoading(true);
       const response = await api.get('/users');
-      setUsers(response.data. users);
+      setUsers(response.data.users);
     } catch (error) {
       console.error('Fetch users error:', error);
       toast.error('Không thể tải danh sách người dùng');

@@ -83,7 +83,7 @@ export default function Booking() {
       toast.success('Đặt bàn thành công!');
       navigate('/my-bookings');
     } catch (error) {
-      const message = error.response?. data?.error || 'Đặt bàn thất bại';
+      const message = error.response?.data?.error || 'Đặt bàn thất bại';
       toast.error(message);
     } finally {
       setSubmitting(false);

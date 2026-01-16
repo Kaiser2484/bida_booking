@@ -106,7 +106,7 @@ export default function MyBookings() {
         <div className="space-y-4">
           {bookings.map((booking) => (
             <div
-              key={booking. id}
+              key={booking.id}
               className="bg-white rounded-xl shadow-lg p-6 hover: shadow-xl transition-shadow"
             >
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

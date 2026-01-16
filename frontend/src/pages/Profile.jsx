@@ -68,7 +68,7 @@ export default function Profile() {
         confirmPassword: '',
       }));
     } catch (error) {
-      const message = error.response?. data?.error || 'Không thể đổi mật khẩu';
+      const message = error.response?.data?.error || 'Không thể đổi mật khẩu';
       toast.error(message);
     } finally {
       setLoading(false);

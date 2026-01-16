@@ -41,7 +41,7 @@ export default function Notifications() {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/notifications/user/${user. id}`);
+      const response = await api.get(`/notifications/user/${user.id}`);
       setNotifications(response.data. notifications);
     } catch (error) {
       console.error('Fetch notifications error:', error);
@@ -123,13 +123,13 @@ export default function Notifications() {
                       </>
                     )}
                     {notification.type === 'BOOKING_CONFIRMED' && (
-                      <>Đơn đặt bàn #{notification. data?.bookingId?.slice(0, 8)} đã được xác nhận.</>
+                      <>Đơn đặt bàn #{notification.data?.bookingId?.slice(0, 8)} đã được xác nhận.</>
                     )}
                     {notification.type === 'BOOKING_CANCELLED' && (
                       <>Đơn đặt bàn #{notification.data?.bookingId?.slice(0, 8)} đã bị hủy. </>
                     )}
                     {notification.type === 'PAYMENT_COMPLETED' && (
-                      <>Thanh toán cho đơn #{notification. data?.bookingId?.slice(0, 8)} thành công! </>
+                      <>Thanh toán cho đơn #{notification.data?.bookingId?.slice(0, 8)} thành công! </>
                     )}
                     {notification. type === 'USER_REGISTERED' && (
                       <>Chào mừng bạn đến với Bida Booking! Hãy đặt bàn đầu tiên của bạn.</>

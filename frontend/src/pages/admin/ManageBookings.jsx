@@ -39,7 +39,7 @@ export default function ManageBookings() {
       if (filters.status) params.status = filters. status;
       
       const response = await api.get('/bookings', { params });
-      setBookings(response. data.bookings);
+      setBookings(response.data.bookings);
     } catch (error) {
       console.error('Fetch bookings error:', error);
       toast.error('Không thể tải danh sách đặt bàn');
@@ -154,11 +154,11 @@ export default function ManageBookings() {
               </thead>
               <tbody>
                 {bookings. map((booking) => (
-                  <tr key={booking. id} className="border-b hover:bg-gray-50">
+                  <tr key={booking.id} className="border-b hover:bg-gray-50">
                     <td className="py-4 px-6">
                       <div>
                         <p className="font-medium">{booking.user_name || 'N/A'}</p>
-                        <p className="text-sm text-gray-500">{booking. user_phone || 'N/A'}</p>
+                        <p className="text-sm text-gray-500">{booking.user_phone || 'N/A'}</p>
                       </div>
                     </td>
                     <td className="py-4 px-6">

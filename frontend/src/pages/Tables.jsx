@@ -85,7 +85,7 @@ export default function Tables() {
         >
           <option value="">Tất cả câu lạc bộ</option>
           {clubs. map((club) => (
-            <option key={club.id} value={club. id}>
+            <option key={club.id} value={club.id}>
               {club.name}
             </option>
           ))}

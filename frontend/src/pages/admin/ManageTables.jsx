@@ -144,7 +144,7 @@ export default function ManageTables() {
                 
                 <select
                   value={table.status}
-                  onChange={(e) => handleUpdateStatus(table. id, e.target.value)}
+                  onChange={(e) => handleUpdateStatus(table.id, e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus: ring-green-500"
                 >
                   <option value="available">Trống</option>
@@ -197,7 +197,7 @@ export default function ManageTables() {
                 >
                   <option value="">Chọn loại bàn</option>
                   {tableTypes. map((type) => (
-                    <option key={type. id} value={type.id}>
+                    <option key={type.id} value={type.id}>
                       {type.name} - {new Intl.NumberFormat('vi-VN').format(type.price_per_hour)}đ/giờ
                     </option>
                   ))}

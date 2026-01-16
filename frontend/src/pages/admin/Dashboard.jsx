@@ -23,7 +23,7 @@ export default function AdminDashboard() {
       
       // Fetch bookings
       const bookingsRes = await api.get('/bookings');
-      const bookings = bookingsRes. data. bookings;
+      const bookings = bookingsRes.data.bookings;
       
       // Fetch payment stats
       const paymentStats = await api.get('/payments/stats');
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
             </thead>
             <tbody>
               {recentBookings.map((booking) => (
-                <tr key={booking. id} className="border-b hover:bg-gray-50">
+                <tr key={booking.id} className="border-b hover:bg-gray-50">
                   <td className="py-3 px-4">
                     <div>
                       <p className="font-medium">{booking.user_name}</p>
