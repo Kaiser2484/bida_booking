@@ -22,7 +22,11 @@ export default function Layout() {
       const response = await api.get(`/notifications/user/${user.id}/unread-count`);
       setUnreadCount(response.data.unreadCount);
     } catch (error) {
-      console.error('Fetch unread count error:', error);
+      if (error.response?.status === 401) {
+        setUnreadCount(0);
+      } else {
+        console.error('Fetch unread count error:', error);
+      }
     }
   };
 

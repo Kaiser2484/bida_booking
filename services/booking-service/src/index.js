@@ -7,6 +7,22 @@ const { createClient } = require('redis');
 const dayjs = require('dayjs');
 
 const app = express();
+const jwt = require('jsonwebtoken');
+
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key_here');
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Token không hợp lệ' });
+  }
+};
 
 // Middleware
 app.use(helmet());
@@ -77,7 +93,7 @@ app.get('/health', (req, res) => {
 });
 
 // Create booking
-app.post('/api/bookings', async (req, res) => {
+app.post('/api/bookings', authMiddleware, async (req, res) => {
   const { userId, tableId, bookingDate, startTime, endTime, notes } = req.body;
   
   // Create lock key based on table and time
@@ -187,7 +203,7 @@ app.post('/api/bookings', async (req, res) => {
 });
 
 // Get user bookings
-app.get('/api/bookings/user/:userId', async (req, res) => {
+app.get('/api/bookings/user/:userId', authMiddleware, async (req, res) => {
   try {
     const { userId } = req.params;
     const { status } = req.query;
@@ -249,7 +265,7 @@ app.get('/api/bookings/:id', async (req, res) => {
 });
 
 // Cancel booking
-app.patch('/api/bookings/:id/cancel', async (req, res) => {
+app.patch('/api/bookings/:id/cancel', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -296,7 +312,7 @@ app.patch('/api/bookings/:id/cancel', async (req, res) => {
 });
 
 // Confirm booking (staff)
-app.patch('/api/bookings/:id/confirm', async (req, res) => {
+app.patch('/api/bookings/:id/confirm', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
 

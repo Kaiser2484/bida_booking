@@ -137,6 +137,7 @@ services:
       - DATABASE_URL=postgresql://bida_admin:bida_secret_2024@postgres:5432/bida_booking
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://bida_mq:bida_mq_secret@rabbitmq:5672
+        - JWT_SECRET=your_jwt_secret_key_here
     depends_on: 
       postgres: 
         condition: service_healthy
@@ -157,6 +158,7 @@ services:
       - PORT=3004
       - DATABASE_URL=postgresql://bida_admin:bida_secret_2024@postgres:5432/bida_booking
       - RABBITMQ_URL=amqp://bida_mq:bida_mq_secret@rabbitmq:5672
+        - JWT_SECRET=your_jwt_secret_key_here
     depends_on: 
       postgres: 
         condition: service_healthy
@@ -193,6 +195,12 @@ services:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:3000
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./frontend/postcss.config.js:/app/postcss.config.js
     depends_on: 
       - api-gateway
     networks: 

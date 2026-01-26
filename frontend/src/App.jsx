@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { useEffect } from 'react';
+import useAuthStore from './store/authStore';
 
 // Layouts
 import Layout from './components/Layout';
@@ -31,6 +33,13 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 
 function App() {
+  const { initAuth } = useAuthStore();
+
+  // Khôi phục authentication khi app load
+  useEffect(() => {
+    initAuth();
+  }, [initAuth]);
+
   return (
     <BrowserRouter>
       <Toaster position="top-right" />
