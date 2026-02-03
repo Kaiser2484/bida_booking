@@ -49,13 +49,13 @@ const connectRabbitMQ = async () => {
   try {
     const connection = await amqp.connect(process.env.RABBITMQ_URL);
     rabbitChannel = await connection.createChannel();
-    
+
     // Declare queues
     await rabbitChannel.assertQueue('booking_events', { durable: true });
     await rabbitChannel.assertQueue('table_status_update', { durable: true });
-    await rabbitChannel.assertQueue('notification_queue', { durable:  true });
+    await rabbitChannel.assertQueue('notification_queue', { durable: true });
     await rabbitChannel.assertQueue('payment_queue', { durable: true });
-    
+
     console.log('✅ Connected to RabbitMQ');
   } catch (error) {
     console.error('RabbitMQ connection error:', error);
@@ -95,16 +95,20 @@ app.get('/health', (req, res) => {
 // Create booking
 app.post('/api/bookings', authMiddleware, async (req, res) => {
   const { userId, tableId, bookingDate, startTime, endTime, notes } = req.body;
-  
+
+  // Create full timestamps
+  const startTimestamp = dayjs(`${bookingDate} ${startTime}`).toISOString();
+  const endTimestamp = dayjs(`${bookingDate} ${endTime}`).toISOString();
+
   // Create lock key based on table and time
   const lockKey = `booking:${tableId}:${bookingDate}:${startTime}`;
-  
+
   try {
     // Acquire distributed lock to prevent race conditions
     const lockAcquired = await acquireLock(lockKey);
     if (!lockAcquired) {
-      return res.status(409).json({ 
-        error: 'Bàn đang được người khác đặt, vui lòng thử lại' 
+      return res.status(409).json({
+        error: 'Bàn đang được người khác đặt, vui lòng thử lại'
       });
     }
 
@@ -112,26 +116,25 @@ app.post('/api/bookings', authMiddleware, async (req, res) => {
     const conflictCheck = await pool.query(
       `SELECT id FROM bookings 
        WHERE table_id = $1 
-       AND booking_date = $2 
        AND status IN ('pending', 'confirmed')
        AND (
-         (start_time <= $3 AND end_time > $3) OR
-         (start_time < $4 AND end_time >= $4) OR
-         (start_time >= $3 AND end_time <= $4)
+         (start_time <= $2 AND end_time > $2) OR
+         (start_time < $3 AND end_time >= $3) OR
+         (start_time >= $2 AND end_time <= $3)
        )`,
-      [tableId, bookingDate, startTime, endTime]
+      [tableId, startTimestamp, endTimestamp]
     );
 
     if (conflictCheck.rows.length > 0) {
       await releaseLock(lockKey);
-      return res.status(400).json({ 
-        error: 'Bàn đã được đặt trong khung giờ này' 
+      return res.status(400).json({
+        error: 'Bàn đã được đặt trong khung giờ này'
       });
     }
 
     // Get table price
     const tableResult = await pool.query(
-      `SELECT tt.price_per_hour 
+      `SELECT COALESCE(t.hourly_rate, tt.price_per_hour) as price_per_hour, t.club_id
        FROM tables t 
        JOIN table_types tt ON t.table_type_id = tt.id 
        WHERE t.id = $1`,
@@ -143,19 +146,20 @@ app.post('/api/bookings', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Không tìm thấy bàn' });
     }
 
-    // Calculate total amount
+    // Calculate total price
     const pricePerHour = parseFloat(tableResult.rows[0].price_per_hour);
+    const clubId = tableResult.rows[0].club_id;
     const start = dayjs(`2000-01-01 ${startTime}`);
     const end = dayjs(`2000-01-01 ${endTime}`);
     const hours = end.diff(start, 'hour', true);
-    const totalAmount = pricePerHour * hours;
+    const totalPrice = pricePerHour * hours;
 
     // Create booking
     const result = await pool.query(
-      `INSERT INTO bookings (user_id, table_id, booking_date, start_time, end_time, total_amount, notes)
+      `INSERT INTO bookings (user_id, table_id, club_id, start_time, end_time, total_price, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [userId, tableId, bookingDate, startTime, endTime, totalAmount, notes]
+      [userId, tableId, clubId, startTimestamp, endTimestamp, totalPrice, notes]
     );
 
     const booking = result.rows[0];
@@ -166,7 +170,7 @@ app.post('/api/bookings', authMiddleware, async (req, res) => {
     // Publish events to other services
     publishEvent('table_status_update', {
       tableId,
-      status:  'reserved',
+      status: 'reserved',
       bookingId: booking.id,
     });
 
@@ -176,17 +180,17 @@ app.post('/api/bookings', authMiddleware, async (req, res) => {
         bookingId: booking.id,
         userId,
         bookingDate,
-        startTime,
-        endTime,
-        totalAmount,
+        startTime: startTimestamp,
+        endTime: endTimestamp,
+        totalPrice,
       },
     });
 
     publishEvent('payment_queue', {
       type: 'CREATE_PAYMENT',
-      data:  {
+      data: {
         bookingId: booking.id,
-        amount: totalAmount,
+        amount: totalPrice,
         userId,
       },
     });
@@ -224,7 +228,7 @@ app.get('/api/bookings/user/:userId', authMiddleware, async (req, res) => {
       query += ` AND b.status = $${params.length}`;
     }
 
-    query += ' ORDER BY b.booking_date DESC, b.start_time DESC';
+    query += ' ORDER BY b.created_at DESC';
 
     const result = await pool.query(query, params);
 
@@ -279,8 +283,8 @@ app.patch('/api/bookings/:id/cancel', authMiddleware, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(400).json({ 
-        error: 'Không thể hủy đơn đặt bàn này' 
+      return res.status(400).json({
+        error: 'Không thể hủy đơn đặt bàn này'
       });
     }
 
@@ -294,7 +298,7 @@ app.patch('/api/bookings/:id/cancel', authMiddleware, async (req, res) => {
 
     // Send notification
     publishEvent('notification_queue', {
-      type:  'BOOKING_CANCELLED',
+      type: 'BOOKING_CANCELLED',
       data: {
         bookingId: booking.id,
         userId: booking.user_id,
@@ -325,8 +329,8 @@ app.patch('/api/bookings/:id/confirm', authMiddleware, async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(400).json({ 
-        error: 'Không thể xác nhận đơn đặt bàn này' 
+      return res.status(400).json({
+        error: 'Không thể xác nhận đơn đặt bàn này'
       });
     }
 
@@ -334,7 +338,7 @@ app.patch('/api/bookings/:id/confirm', authMiddleware, async (req, res) => {
 
     // Send notification
     publishEvent('notification_queue', {
-      type:  'BOOKING_CONFIRMED',
+      type: 'BOOKING_CONFIRMED',
       data: {
         bookingId: booking.id,
         userId: booking.user_id,
@@ -347,6 +351,52 @@ app.patch('/api/bookings/:id/confirm', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('Confirm booking error:', error);
+    res.status(500).json({ error: 'Lỗi server' });
+  }
+});
+
+// Complete booking (admin/staff)
+app.patch('/api/bookings/:id/complete', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `UPDATE bookings 
+       SET status = 'completed', updated_at = NOW()
+       WHERE id = $1 AND status = 'confirmed'
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({
+        error: 'Không thể hoàn thành đơn đặt bàn này (phải ở trạng thái đã xác nhận)'
+      });
+    }
+
+    const booking = result.rows[0];
+
+    // Update table status to available
+    publishEvent('table_status_update', {
+      tableId: booking.table_id,
+      status: 'available',
+    });
+
+    // Send notification
+    publishEvent('notification_queue', {
+      type: 'BOOKING_COMPLETED',
+      data: {
+        bookingId: booking.id,
+        userId: booking.user_id,
+      },
+    });
+
+    res.json({
+      message: 'Hoàn thành đặt bàn',
+      booking,
+    });
+  } catch (error) {
+    console.error('Complete booking error:', error);
     res.status(500).json({ error: 'Lỗi server' });
   }
 });
@@ -370,7 +420,7 @@ app.get('/api/bookings', async (req, res) => {
 
     if (date) {
       params.push(date);
-      query += ` AND b.booking_date = $${params.length}`;
+      query += ` AND DATE(b.start_time) = $${params.length}`;
     }
 
     if (status) {
@@ -383,11 +433,11 @@ app.get('/api/bookings', async (req, res) => {
       query += ` AND t.club_id = $${params.length}`;
     }
 
-    query += ' ORDER BY b.booking_date DESC, b.start_time ASC';
+    query += ' ORDER BY b.start_time DESC';
 
     const result = await pool.query(query, params);
 
-    res.json({ bookings:  result.rows });
+    res.json({ bookings: result.rows });
   } catch (error) {
     console.error('Get all bookings error:', error);
     res.status(500).json({ error: 'Lỗi server' });
@@ -400,7 +450,7 @@ const PORT = process.env.PORT || 3003;
 const startServer = async () => {
   await connectRedis();
   await connectRabbitMQ();
-  
+
   app.listen(PORT, () => {
     console.log(`🚀 Booking Service running on port ${PORT}`);
   });

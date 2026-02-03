@@ -13,7 +13,14 @@ export default function Layout() {
     if (isAuthenticated && user?.id) {
       fetchUnreadCount();
       const interval = setInterval(fetchUnreadCount, 30000); // Poll every 30s
-      return () => clearInterval(interval);
+
+      const handleRefresh = () => fetchUnreadCount();
+      window.addEventListener('refreshNotifications', handleRefresh);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('refreshNotifications', handleRefresh);
+      };
     }
   }, [isAuthenticated, user]);
 
@@ -45,24 +52,22 @@ export default function Layout() {
             <div className="hidden md:flex items-center gap-6">
               <Link
                 to="/tables"
-                className={`transition-colors ${
-                  location.pathname === '/tables'
+                className={`transition-colors ${location.pathname === '/tables'
                     ? 'text-green-600 font-medium'
                     : 'text-gray-600 hover:text-green-600'
-                }`}
+                  }`}
               >
                 Danh sách bàn
               </Link>
 
-              {isAuthenticated ?  (
+              {isAuthenticated ? (
                 <>
                   <Link
                     to="/my-bookings"
-                    className={`transition-colors ${
-                      location.pathname === '/my-bookings'
+                    className={`transition-colors ${location.pathname === '/my-bookings'
                         ? 'text-green-600 font-medium'
-                        :  'text-gray-600 hover: text-green-600'
-                    }`}
+                        : 'text-gray-600 hover: text-green-600'
+                      }`}
                   >
                     Lịch sử đặt bàn
                   </Link>
@@ -84,10 +89,10 @@ export default function Layout() {
                       to="/profile"
                       className="text-gray-700 hover:text-green-600 transition-colors"
                     >
-                      👤 <span className="hidden lg:inline">{user?. full_name || user?.fullName}</span>
+                      👤 <span className="hidden lg:inline">{user?.full_name || user?.fullName}</span>
                     </Link>
 
-                    {(user?.role === 'admin' || user?. role === 'staff') && (
+                    {(user?.role === 'admin' || user?.role === 'staff') && (
                       <Link
                         to="/admin"
                         className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-lg text-sm transition-colors"
@@ -225,7 +230,7 @@ export default function Layout() {
             <div>
               <h3 className="text-xl font-bold text-green-400 mb-4">🎱 Bida Booking</h3>
               <p className="text-gray-400">
-                Hệ thống đặt bàn bida trực tuyến - Nhanh chóng, tiện lợi, dễ sử dụng. 
+                Hệ thống đặt bàn bida trực tuyến - Nhanh chóng, tiện lợi, dễ sử dụng.
               </p>
             </div>
             <div>

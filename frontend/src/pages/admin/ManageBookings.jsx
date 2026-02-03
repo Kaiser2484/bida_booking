@@ -14,7 +14,7 @@ const statusColors = {
 const statusText = {
   pending: 'Chờ xác nhận',
   confirmed: 'Đã xác nhận',
-  cancelled:  'Đã hủy',
+  cancelled: 'Đã hủy',
   completed: 'Hoàn thành',
   no_show: 'Không đến',
 };
@@ -36,10 +36,21 @@ export default function ManageBookings() {
       setLoading(true);
       const params = {};
       if (filters.date) params.date = filters.date;
-      if (filters.status) params.status = filters. status;
-      
+      if (filters.status) params.status = filters.status;
+
       const response = await api.get('/bookings', { params });
-      setBookings(response.data.bookings);
+
+      // Sort: Priority (Pending > Confirmed > Completed > Cancelled) then Newest First
+      const sortedBookings = response.data.bookings.sort((a, b) => {
+        const priority = { pending: 1, confirmed: 2, completed: 3, cancelled: 4, no_show: 5 };
+        const weightA = priority[a.status] || 99;
+        const weightB = priority[b.status] || 99;
+
+        if (weightA !== weightB) return weightA - weightB;
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+
+      setBookings(sortedBookings);
     } catch (error) {
       console.error('Fetch bookings error:', error);
       toast.error('Không thể tải danh sách đặt bàn');
@@ -50,7 +61,7 @@ export default function ManageBookings() {
 
   const handleConfirm = async (bookingId) => {
     try {
-      await api.patch(`/bookings/${bookingId}/confirm`);
+      await api.patch(`/bookings/${bookingId}/confirm`, { action: 'confirm' });
       toast.success('Đã xác nhận đặt bàn');
       fetchBookings();
     } catch (error) {
@@ -59,8 +70,8 @@ export default function ManageBookings() {
   };
 
   const handleCancel = async (bookingId) => {
-    if (! confirm('Bạn có chắc chắn muốn hủy đặt bàn này?')) return;
-    
+    if (!confirm('Bạn có chắc chắn muốn hủy đặt bàn này?')) return;
+
     try {
       await api.patch(`/bookings/${bookingId}/cancel`, {
         reason: 'Hủy bởi admin',
@@ -74,11 +85,11 @@ export default function ManageBookings() {
 
   const handleComplete = async (bookingId) => {
     try {
-      await api.patch(`/bookings/${bookingId}/complete`);
+      await api.patch(`/bookings/${bookingId}/complete`, { action: 'complete' });
       toast.success('Đã hoàn thành đặt bàn');
       fetchBookings();
     } catch (error) {
-      toast. error('Không thể cập nhật trạng thái');
+      toast.error('Không thể cập nhật trạng thái');
     }
   };
 
@@ -98,7 +109,7 @@ export default function ManageBookings() {
             <input
               type="date"
               value={filters.date}
-              onChange={(e) => setFilters({ ... filters, date: e.target.value })}
+              onChange={(e) => setFilters({ ...filters, date: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus: ring-green-500"
             />
           </div>
@@ -147,13 +158,12 @@ export default function ManageBookings() {
                   <th className="text-left py-4 px-6 font-semibold">Khách hàng</th>
                   <th className="text-left py-4 px-6 font-semibold">Bàn</th>
                   <th className="text-left py-4 px-6 font-semibold">Thời gian</th>
-                  <th className="text-left py-4 px-6 font-semibold">Tổng tiền</th>
                   <th className="text-left py-4 px-6 font-semibold">Trạng thái</th>
                   <th className="text-left py-4 px-6 font-semibold">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
-                {bookings. map((booking) => (
+                {bookings.map((booking) => (
                   <tr key={booking.id} className="border-b hover:bg-gray-50">
                     <td className="py-4 px-6">
                       <div>
@@ -170,17 +180,12 @@ export default function ManageBookings() {
                     <td className="py-4 px-6">
                       <div>
                         <p className="font-medium">
-                          {dayjs(booking.booking_date).format('DD/MM/YYYY')}
+                          {dayjs(booking.start_time).format('DD/MM/YYYY')}
                         </p>
                         <p className="text-sm text-gray-500">
-                          {booking.start_time} - {booking.end_time}
+                          {dayjs(booking.start_time).format('HH:mm')} - {dayjs(booking.end_time).format('HH:mm')}
                         </p>
                       </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className="font-semibold text-green-600">
-                        {new Intl.NumberFormat('vi-VN').format(booking.total_amount)}đ
-                      </span>
                     </td>
                     <td className="py-4 px-6">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[booking.status]}`}>
@@ -213,6 +218,12 @@ export default function ManageBookings() {
                             Hoàn thành
                           </button>
                         )}
+                        <a
+                          href={`/admin/bookings/${booking.id}`}
+                          className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-sm transition-colors flex items-center"
+                        >
+                          Chi tiết
+                        </a>
                       </div>
                     </td>
                   </tr>

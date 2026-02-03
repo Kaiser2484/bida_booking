@@ -11,12 +11,9 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 
-// Add JSON parser for non-proxied routes
-app.use(express.json());
-
 // Rate limiting
 const limiter = rateLimit({
-  windowMs:  15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 1000, // Increased limit for development
   message: { error: 'Quá nhiều request, vui lòng thử lại sau' },
 });
@@ -34,14 +31,14 @@ const SERVICES = {
 // Auth middleware
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key_here');
     req.user = decoded;
     next();
   } catch (error) {
@@ -54,13 +51,14 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'api-gateway' });
 });
 
-// Proxy options with body parser integration
-const createProxy = (target) => {
+// Simple proxy without body handling for public routes
+const createSimpleProxy = (target) => {
   return createProxyMiddleware({
     target,
     changeOrigin: true,
-    pathRewrite: {}, // Don't rewrite paths
     logLevel: 'debug',
+    timeout: 30000,
+    proxyTimeout: 30000,
     onError: (err, req, res) => {
       console.error('Proxy error:', err.message);
       if (!res.headersSent) {
@@ -69,9 +67,44 @@ const createProxy = (target) => {
     },
     onProxyReq: (proxyReq, req, res) => {
       console.log(`[${req.method}] ${req.url} -> ${target}${req.url}`);
-      
+    },
+  });
+};
+
+// ==================== PUBLIC ROUTES (NO BODY PARSING) ====================
+
+// User service - public routes (before express.json)
+app.use('/api/users/register', createSimpleProxy(SERVICES.user));
+app.use('/api/users/login', createSimpleProxy(SERVICES.user));
+
+// Table service - public routes (GET only)
+app.use('/api/clubs', createSimpleProxy(SERVICES.table));
+app.use('/api/table-types', createSimpleProxy(SERVICES.table));
+app.get('/api/tables', createSimpleProxy(SERVICES.table));
+app.get('/api/tables/:id', createSimpleProxy(SERVICES.table));
+
+// ==================== BODY PARSER FOR PROTECTED ROUTES ====================
+app.use(express.json());
+
+// Proxy with body re-streaming for protected routes
+const createProxy = (target) => {
+  return createProxyMiddleware({
+    target,
+    changeOrigin: true,
+    logLevel: 'debug',
+    timeout: 30000,
+    proxyTimeout: 30000,
+    onError: (err, req, res) => {
+      console.error('Proxy error:', err.message);
+      if (!res.headersSent) {
+        res.status(503).json({ error: 'Service unavailable' });
+      }
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(`[${req.method}] ${req.url} -> ${target}${req.url}`);
+
       // Re-stream body for POST/PUT/PATCH
-      if (req.body && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+      if (req.body && Object.keys(req.body).length > 0 && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
         const bodyData = JSON.stringify(req.body);
         proxyReq.setHeader('Content-Type', 'application/json');
         proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
@@ -81,22 +114,17 @@ const createProxy = (target) => {
   });
 };
 
-// ==================== PUBLIC ROUTES ====================
-
-// User service - public routes
-app.use('/api/users/register', createProxy(SERVICES.user));
-app.use('/api/users/login', createProxy(SERVICES.user));
-
-// Table service - public routes
-app.use('/api/clubs', createProxy(SERVICES.table));
-app.use('/api/table-types', createProxy(SERVICES.table));
-app.use('/api/tables', createProxy(SERVICES.table));
-
 // ==================== PROTECTED ROUTES ====================
 
 // User service - protected routes
 app.use('/api/users/profile', authMiddleware, createProxy(SERVICES.user));
 app.use('/api/users', authMiddleware, createProxy(SERVICES.user));
+
+// Table service - protected routes for admin operations
+app.put('/api/tables/:id', authMiddleware, createProxy(SERVICES.table));
+app.patch('/api/tables/:id/status', authMiddleware, createProxy(SERVICES.table));
+app.delete('/api/tables/:id', authMiddleware, createProxy(SERVICES.table));
+app.post('/api/tables', authMiddleware, createProxy(SERVICES.table));
 
 // Booking service - protected routes
 app.use('/api/bookings', authMiddleware, createProxy(SERVICES.booking));
@@ -106,6 +134,7 @@ app.use('/api/payments', authMiddleware, createProxy(SERVICES.payment));
 
 // Notification service - protected routes
 app.use('/api/notifications', authMiddleware, createProxy(SERVICES.notification));
+
 
 // ==================== ERROR HANDLING ====================
 

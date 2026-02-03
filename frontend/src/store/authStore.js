@@ -12,20 +12,20 @@ const useAuthStore = create(
       login: async (email, password) => {
         const response = await api.post('/users/login', { email, password });
         const { user, token } = response.data;
-        
+
         set({ user, token, isAuthenticated: true });
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        
+
         return response.data;
       },
 
       register: async (data) => {
         const response = await api.post('/users/register', data);
         const { user, token } = response.data;
-        
+
         set({ user, token, isAuthenticated: true });
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        
+
         return response.data;
       },
 
@@ -43,6 +43,12 @@ const useAuthStore = create(
     }),
     {
       name: 'auth-storage',
+      onRehydrateStorage: () => (state) => {
+        // Tự động thiết lập Authorization header sau khi hydrate
+        if (state?.token) {
+          api.defaults.headers.common['Authorization'] = `Bearer ${state.token}`;
+        }
+      },
     }
   )
 );

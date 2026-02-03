@@ -39,7 +39,7 @@ export default function ManageUsers() {
 
   const handleToggleActive = async (userId, isActive) => {
     try {
-      await api.patch(`/users/${userId}/status`, { isActive: ! isActive });
+      await api.patch(`/users/${userId}/status`, { isActive: !isActive });
       toast.success(isActive ? 'Đã vô hiệu hóa tài khoản' : 'Đã kích hoạt tài khoản');
       fetchUsers();
     } catch (error) {
@@ -53,15 +53,15 @@ export default function ManageUsers() {
       toast.success('Cập nhật vai trò thành công');
       fetchUsers();
     } catch (error) {
-      toast. error('Không thể cập nhật vai trò');
+      toast.error('Không thể cập nhật vai trò');
     }
   };
 
-  const filteredUsers = users. filter(
+  const filteredUsers = users.filter(
     (user) =>
-      user.full_name?. toLowerCase().includes(search.toLowerCase()) ||
-      user.email?. toLowerCase().includes(search.toLowerCase()) ||
-      user.phone?. includes(search)
+      user.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      user.email?.toLowerCase().includes(search.toLowerCase()) ||
+      user.phone?.includes(search)
   );
 
   return (
@@ -75,7 +75,7 @@ export default function ManageUsers() {
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e. target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Tìm kiếm theo tên, email hoặc SĐT..."
           className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
         />
@@ -106,11 +106,11 @@ export default function ManageUsers() {
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold">
-                          {user.full_name?. charAt(0) || 'U'}
+                          {user.full_name?.charAt(0) || 'U'}
                         </div>
                         <div>
                           <p className="font-medium">{user.full_name}</p>
-                          <p className="text-sm text-gray-500">ID: {user.id. slice(0, 8)}</p>
+                          <p className="text-sm text-gray-500">ID: {String(user.id)}</p>
                         </div>
                       </div>
                     </td>
@@ -134,23 +134,21 @@ export default function ManageUsers() {
                     </td>
                     <td className="py-4 px-6">
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          user.is_active
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${user.is_active
                             ? 'bg-green-100 text-green-800'
-                            :  'bg-red-100 text-red-800'
-                        }`}
+                            : 'bg-red-100 text-red-800'
+                          }`}
                       >
-                        {user. is_active ? 'Hoạt động' : 'Vô hiệu'}
+                        {user.is_active ? 'Hoạt động' : 'Vô hiệu'}
                       </span>
                     </td>
                     <td className="py-4 px-6">
                       <button
                         onClick={() => handleToggleActive(user.id, user.is_active)}
-                        className={`px-3 py-1 rounded text-sm transition-colors ${
-                          user.is_active
-                            ?  'bg-red-100 hover:bg-red-200 text-red-700'
-                            :  'bg-green-100 hover: bg-green-200 text-green-700'
-                        }`}
+                        className={`px-3 py-1 rounded text-sm transition-colors ${user.is_active
+                            ? 'bg-red-100 hover:bg-red-200 text-red-700'
+                            : 'bg-green-100 hover: bg-green-200 text-green-700'
+                          }`}
                       >
                         {user.is_active ? 'Vô hiệu hóa' : 'Kích hoạt'}
                       </button>
@@ -162,7 +160,7 @@ export default function ManageUsers() {
           </div>
         )}
 
-        {! loading && filteredUsers.length === 0 && (
+        {!loading && filteredUsers.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             Không tìm thấy người dùng nào
           </div>

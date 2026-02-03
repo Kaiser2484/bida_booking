@@ -12,9 +12,9 @@ const httpServer = createServer(app);
 
 // Socket.io for real-time updates
 const io = new Server(httpServer, {
-  cors:  {
-    origin:  '*',
-    methods:  ['GET', 'POST'],
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
   },
 });
 
@@ -44,9 +44,9 @@ const connectRabbitMQ = async () => {
     const connection = await amqp.connect(process.env.RABBITMQ_URL);
     rabbitChannel = await connection.createChannel();
     await rabbitChannel.assertQueue('table_events', { durable: true });
-    
+
     // Listen for booking events to update table status
-    await rabbitChannel.assertQueue('table_status_update', { durable:  true });
+    await rabbitChannel.assertQueue('table_status_update', { durable: true });
     rabbitChannel.consume('table_status_update', async (msg) => {
       if (msg) {
         const event = JSON.parse(msg.content.toString());
@@ -54,7 +54,7 @@ const connectRabbitMQ = async () => {
         rabbitChannel.ack(msg);
       }
     });
-    
+
     console.log('✅ Connected to RabbitMQ');
   } catch (error) {
     console.error('RabbitMQ connection error:', error);
@@ -66,10 +66,10 @@ const connectRabbitMQ = async () => {
 const handleTableStatusUpdate = async (event) => {
   const { tableId, status } = event;
   await pool.query('UPDATE tables SET status = $1 WHERE id = $2', [status, tableId]);
-  
+
   // Clear cache
   await redisClient.del('tables: all');
-  
+
   // Notify clients via Socket.io
   io.emit('tableStatusChanged', { tableId, status });
 };
@@ -77,7 +77,7 @@ const handleTableStatusUpdate = async (event) => {
 // Socket.io connections
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
-  
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
   });
@@ -122,13 +122,14 @@ app.get('/api/tables', async (req, res) => {
     // Try cache first
     const cacheKey = `tables:${clubId || 'all'}: ${status || 'all'}`;
     const cached = await redisClient.get(cacheKey);
-    
+
     if (cached) {
       return res.json({ tables: JSON.parse(cached), fromCache: true });
     }
 
     let query = `
-      SELECT t.*, c.name as club_name, tt.name as type_name
+      SELECT t.*, c.name as club_name, tt.name as type_name,
+             COALESCE(t.hourly_rate, tt.price_per_hour) as price_per_hour
       FROM tables t
       JOIN clubs c ON t.club_id = c.id
       JOIN table_types tt ON t.table_type_id = tt.id
@@ -164,9 +165,10 @@ app.get('/api/tables', async (req, res) => {
 app.get('/api/tables/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const result = await pool.query(
-      `SELECT t.*, c.name as club_name, c.address, tt.name as type_name
+      `SELECT t.*, c.name as club_name, c.address, tt.name as type_name,
+              COALESCE(t.hourly_rate, tt.price_per_hour) as price_per_hour
        FROM tables t
        JOIN clubs c ON t.club_id = c.id
        JOIN table_types tt ON t.table_type_id = tt.id
@@ -239,6 +241,89 @@ app.patch('/api/tables/:id/status', async (req, res) => {
   }
 });
 
+// Update table info (admin)
+app.put('/api/tables/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tableNumber, tableTypeId, hourlyRate, floor, name } = req.body;
+
+    const result = await pool.query(
+      `UPDATE tables 
+       SET table_number = COALESCE($1, table_number),
+           table_type_id = COALESCE($2, table_type_id),
+           hourly_rate = COALESCE($3, hourly_rate),
+           floor = COALESCE($4, floor),
+           name = COALESCE($5, name),
+           updated_at = NOW()
+       WHERE id = $6
+       RETURNING *`,
+      [tableNumber, tableTypeId, hourlyRate, floor, name, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Không tìm thấy bàn' });
+    }
+
+    // Clear all table caches
+    const keys = await redisClient.keys('tables:*');
+    if (keys.length > 0) {
+      await redisClient.del(keys);
+    }
+
+    // Notify via Socket.io
+    io.emit('tableUpdated', result.rows[0]);
+
+    res.json({ message: 'Cập nhật bàn thành công', table: result.rows[0] });
+  } catch (error) {
+    console.error('Update table error:', error);
+    res.status(500).json({ error: 'Lỗi server' });
+  }
+});
+
+// Delete table (soft delete - admin)
+app.delete('/api/tables/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if table has active bookings
+    const bookingCheck = await pool.query(
+      `SELECT id FROM bookings 
+       WHERE table_id = $1 AND status IN ('pending', 'confirmed')`,
+      [id]
+    );
+
+    if (bookingCheck.rows.length > 0) {
+      return res.status(400).json({
+        error: 'Không thể xóa bàn đang có đơn đặt chưa hoàn thành'
+      });
+    }
+
+    // Soft delete
+    const result = await pool.query(
+      'UPDATE tables SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Không tìm thấy bàn' });
+    }
+
+    // Clear all table caches
+    const keys = await redisClient.keys('tables:*');
+    if (keys.length > 0) {
+      await redisClient.del(keys);
+    }
+
+    // Notify via Socket.io
+    io.emit('tableDeleted', { tableId: id });
+
+    res.json({ message: 'Xóa bàn thành công' });
+  } catch (error) {
+    console.error('Delete table error:', error);
+    res.status(500).json({ error: 'Lỗi server' });
+  }
+});
+
 // Get available tables for a time slot
 app.get('/api/tables/available', async (req, res) => {
   try {
@@ -252,7 +337,7 @@ app.get('/api/tables/available', async (req, res) => {
        AND t.status = 'available'
        AND t.id NOT IN (
          SELECT table_id FROM bookings 
-         WHERE booking_date = $2 
+         WHERE DATE(start_time) = $2 
          AND status IN ('pending', 'confirmed')
          AND (
            (start_time <= $3 AND end_time > $3) OR
@@ -277,7 +362,7 @@ const PORT = process.env.PORT || 3002;
 const startServer = async () => {
   await connectRedis();
   await connectRabbitMQ();
-  
+
   httpServer.listen(PORT, () => {
     console.log(`🚀 Table Service running on port ${PORT}`);
   });

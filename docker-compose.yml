@@ -72,6 +72,7 @@ services:
       - TABLE_SERVICE_URL=http://table-service:3002
       - BOOKING_SERVICE_URL=http://booking-service:3003
       - PAYMENT_SERVICE_URL=http://payment-service:3004
+      - JWT_SECRET=your_jwt_secret_key_here
     depends_on: 
       - user-service
       - table-service
@@ -137,7 +138,7 @@ services:
       - DATABASE_URL=postgresql://bida_admin:bida_secret_2024@postgres:5432/bida_booking
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://bida_mq:bida_mq_secret@rabbitmq:5672
-        - JWT_SECRET=your_jwt_secret_key_here
+      - JWT_SECRET=your_jwt_secret_key_here
     depends_on: 
       postgres: 
         condition: service_healthy
@@ -158,7 +159,7 @@ services:
       - PORT=3004
       - DATABASE_URL=postgresql://bida_admin:bida_secret_2024@postgres:5432/bida_booking
       - RABBITMQ_URL=amqp://bida_mq:bida_mq_secret@rabbitmq:5672
-        - JWT_SECRET=your_jwt_secret_key_here
+      - JWT_SECRET=your_jwt_secret_key_here
     depends_on: 
       postgres: 
         condition: service_healthy

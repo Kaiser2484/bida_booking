@@ -25,6 +25,7 @@ import Notifications from './pages/Notifications';
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
 import ManageBookings from './pages/admin/ManageBookings';
+import BookingDetail from './pages/admin/BookingDetail';
 import ManageTables from './pages/admin/ManageTables';
 import ManageUsers from './pages/admin/ManageUsers';
 
@@ -52,7 +53,7 @@ function App() {
           <Route path="register" element={<Register />} />
           <Route path="payment-success" element={<PaymentSuccess />} />
           <Route path="payment-failed" element={<PaymentFailed />} />
-          
+
           {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>
             <Route path="booking/:tableId" element={<Booking />} />
@@ -68,6 +69,7 @@ function App() {
           <Route element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="bookings" element={<ManageBookings />} />
+            <Route path="bookings/:id" element={<BookingDetail />} />
             <Route path="tables" element={<ManageTables />} />
             <Route path="users" element={<ManageUsers />} />
           </Route>
